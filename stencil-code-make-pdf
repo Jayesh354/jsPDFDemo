@@ -1,0 +1,160 @@
+exportPDFAutoTable(e) {
+    e.preventDefault();
+    let doc,header,lineSplitedUnitValue;
+    header  = this.setupHeader();
+    const pdfAutoTableFormatedData=this.prepareData();
+
+    if(this.showGroupedTable){
+      doc = new jsPDF('portrait');
+      this.initializeHeaderLine(doc);
+      lineSplitedUnitValue = 160
+      this.renderTable(doc,header,pdfAutoTableFormatedData);
+    }
+    else{
+      doc=new jsPDF('landscape');
+      this.initializeHeaderLine(doc);
+      header = this.setupHeader();
+      lineSplitedUnitValue = 250; 
+      this.renderTable(doc,header,pdfAutoTableFormatedData);
+    }
+    this.addDisclaimer(doc,lineSplitedUnitValue);
+    if(this.showDisclaimer){
+      this.addDisclaimerLogo(doc);
+    }
+    doc.save(`insider_register_${slugify(this.symbol.toLowerCase())}.pdf`);
+  }
+
+
+  initializeHeaderLine(doc) {
+    const fontSize = 10;
+    const fontType = 'normal';
+    const headerText = `Transaction History: ${this.startDate} TO ${this.endDate}`;
+
+    doc.setFontSize(fontSize);
+    doc.setFont(fontType);
+    doc.text(headerText, doc.internal.pageSize.width - 20, 10, { align: 'right' });
+  }
+
+  setupHeader() {
+    let header;
+    if (this.showGroupedTable) {
+      header = [[
+        { title: 'Pub. date', dataKey: 'publicationdate' },
+        { title: 'Transaction Date', dataKey: 'transactiondate' },
+        { title: 'Transaction type', dataKey: 'natureoftransaction' },
+        { title: 'Instrument', dataKey: 'instrument' },
+        { title: 'Volume', dataKey: 'volume' },
+        { title: 'Price', dataKey: 'price' },
+        { title: 'Currency', dataKey: 'currency' },
+      ]];
+    }
+    else {
+      header = [[
+        { title: 'Pub. date', dataKey: 'publicationdate' },
+        { title: 'Name', dataKey: 'persondischargeresponsibilities' },
+        { title: 'Transaction type', dataKey: 'natureoftransaction' },
+        { title: 'Instrument', dataKey: 'instrument' },
+        { title: 'Volume', dataKey: 'volume' },
+        { title: 'Price', dataKey: 'price' },
+        { title: 'Currency', dataKey: 'currency' },
+      ]];
+    }
+    return header ;
+  }
+
+  prepareData() {
+    const data = [];
+    const prepareDataFunction = item => {
+      if (this.showGroupedTable) {
+        return [
+          getFormattedDateTime(item.publicationdate, this.dateFormat),
+          getFormattedDateTime(item.transactiondate, this.dateFormat),
+          item.natureoftransaction,
+          item.instrument,
+          item.volume,
+          formatNumber(item.price, this.precision, this.invLang),
+          item.currency,
+        ];
+      }
+      else {
+        return [
+          getFormattedDateTime(item.publicationdate, this.dateFormat),
+          `${item.persondischargeresponsibilities}
+Position: 
+${item.position}`,
+          item.natureoftransaction,
+          item.instrument,
+          item.volume,
+          formatNumber(item.price, this.precision, this.invLang),
+          item.currency,
+        ];
+      }
+    };
+
+    if (this.showGroupedTable) {
+      this.groupedRecords.forEach(item => data.push(prepareDataFunction(item)));
+    }
+    else {
+      this.filteredRecords.forEach(item => data.push(prepareDataFunction(item)));
+    }
+
+    return data;
+  }
+
+  renderTable(doc, header, data) {
+    if(this.showGroupedTable){
+      doc.setFontSize(8);
+      doc.text('Name: '+this.groupedRecords[0].persondischargeresponsibilities,15, 15)
+      doc.text('Position: '+this.groupedRecords[0].position,15, 20)
+    }
+    const startY = this.showGroupedTable ? 25 : 20;
+    autoTable(doc, {
+      head: header,
+      body: data,
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 'wrap', valign: 'top' },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 35 },
+        4: { halign: 'right', cellWidth: 'auto' },
+        5: { halign: 'right', cellWidth: 'auto' },
+        6: { cellWidth: 'auto' }
+      },
+      bodyStyles: { fontSize: 7 },
+      tableWidth: 'wrap',
+      startY
+    });
+  }
+
+  addDisclaimer(doc, lineSplitedUnitValue) {
+    const disclaimerData = 'Source: Financial Supervisory Authority (Finansinspektionen). Due' +
+    'to legislative changes the information is limited to insider' +
+    'transactions since July 2016. A person\'s total holdings in a' +
+    'specific company is not reported in the register.';
+
+    const disclaimerLines = doc.splitTextToSize(disclaimerData, lineSplitedUnitValue);
+    doc.text(disclaimerLines, 15, doc.autoTable.previous.finalY + 10);
+  }
+
+  addDisclaimerLogo(doc) {
+    let logoWidth,logoHeight,logoX,logoY;
+    if(this.showGroupedTable){
+      logoWidth = 30;
+      logoHeight = 10;
+      logoX=45;
+      logoY=doc.autoTable.previous.finalY + 25;
+    }
+    else{
+      logoWidth = 30;
+      logoHeight = 10;
+      logoX=50;
+      logoY=doc.autoTable.previous.finalY + 25;
+    }
+    try {
+      doc.text('Service Provided By: ', 15, doc.autoTable.previous.finalY + 30);
+      doc.addImage(this.disclaimerLogoUrl, 'PNG', logoX,logoY , logoWidth, logoHeight);
+    }
+    catch (error) {
+      console.log(error);
+    }
+  }
